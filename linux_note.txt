@@ -1,0 +1,2 @@
+I am learning Linux for robotics.
+My current system is Ubuntu 24.04.

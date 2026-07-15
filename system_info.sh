@@ -12,6 +12,7 @@ LOG_FILE="$LOG_DIR/system_info_$(date +%F_%H-%M-%S).log"
     echo "User: $(whoami)"
     echo "Host: $(hostname)"
     echo "Kernel: $(uname -r)"
+    echo "Uptime: $(uptime -p)"
     echo
 
     echo "[CPU]"

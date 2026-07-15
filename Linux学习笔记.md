@@ -139,6 +139,16 @@ sudo apt install 软件包名            # 安装软件包
 5. 使用 `lsusb` 输出 USB 设备信息。
 6. 使用 `tee` 同时在终端显示结果、写入带时间戳的日志文件。
 
+下一次脚本改进：在 `[User and Host]` 区域加入 `uptime -p` 的输出。`uptime -p` 会给出人类易读的系统运行时长，例如 `up 10 hours, 30 minutes`，用于判断机器人主机或控制程序所在设备已连续运行多久。
+
+已完成改进：`system_info.sh` 的 `[User and Host]` 区域新增：
+
+```bash
+echo "Uptime: $(uptime -p)"
+```
+
+脚本已验证能够输出系统运行时长并生成新日志。
+
 ### 可执行权限
 
 ```bash
@@ -227,6 +237,8 @@ fb24c4a Complete Linux stage 1 basics
 
 当 `git status` 显示 `working tree clean`，表示当前文件状态与最新提交一致。`git restore` 可以丢弃未暂存改动，只有确定不再需要改动时才使用。
 
+`git diff` 在输出较长时会进入翻页器；看到末尾 `:` 时按 `q` 退出并回到终端。
+
 ## 9. 命令帮助
 
 ```bash
@@ -301,6 +313,40 @@ ssh-add ~/.ssh/id_ed25519
 已确认：将本笔记公开发布到 `niuniu-huan/linux-learning-stage1`。下一步从 `/mnt/c/Users/moqi_/Desktop/learning/linux_learning/` 复制到 WSL 仓库，再以 Git 提交。
 
 已完成首次笔记发布，提交为 `f1c83d0 Add Linux learning notes`。Git 在终端中显示中文文件名时可能使用 `\345...` 形式转义，这不影响真实文件名。Markdown 文件应为普通文本权限 `644`，不应带可执行权限；同步时使用 `chmod 644 Linux学习笔记.md` 修正。
+
+## 12. VS Code 与 WSL（进行中）
+
+已确认 WSL 中 `code` 命令可用，Visual Studio Code 版本为 `1.128.0`。在 Linux 项目目录运行：
+
+```bash
+code .
+```
+
+可将当前 WSL 目录直接作为 VS Code 工作区打开。编辑器左下角应显示 WSL/Ubuntu 远程环境；此时内置终端、文件操作、Git、编译器和后续 ROS 2 工具均在 Ubuntu 中运行，而不是在 Windows PowerShell 中运行。
+
+已成功打开 `stage1` 工作区，资源管理器可见脚本、日志和学习笔记。若 VS Code 显示“受限模式”，对于自己创建并确认安全的学习目录可通过顶部横幅的“管理”选择信任该文件夹，以启用终端、Git、扩展等完整功能。截图标题中的“管理员”表示 Windows 上的 VS Code 以管理员权限运行；日常开发不需要管理员权限，后续应以普通方式启动 VS Code，避免产生权限不一致的问题。
+
+### 本地 UNC 浏览与 Remote - WSL 的区别
+
+若 VS Code 内置终端提示符为 `PS ... \\wsl.localhost\\Ubuntu-24.04\\...>`，说明当前是 Windows PowerShell 通过 UNC 路径浏览 WSL 文件，不是 Remote - WSL。此时不能直接运行 Linux 的 `.sh` 文件。
+
+正确的 Remote - WSL 终端提示符应类似：
+
+```text
+moqi_@moqihuan:~/linux_learning/stage1$
+```
+
+需要安装并使用 Microsoft 的 `Remote - WSL` 扩展，打开远程 Ubuntu 窗口后再运行 Linux 命令。
+
+若扩展市场显示 `Failed to fetch`，说明 VS Code 无法访问 Marketplace，通常与网络、代理或 TLS 拦截有关，不是 WSL 本身的错误。可先从 Ubuntu 终端使用下列命令尝试安装并获得明确输出：
+
+```bash
+code --install-extension ms-vscode-remote.remote-wsl
+```
+
+若仍失败，再检查 VS Code 的网络/代理设置或改用官方 VSIX 离线安装包。
+
+已成功切换到 Remote - WSL：VS Code 左下角显示 `WSL: Ubuntu-24.04`，内置终端显示 `moqi_@moqihuan:~/linux_learning/stage1$`。这两个标志确认命令会在 Ubuntu 中执行。
 
 ## 11. tmux（进行中）
 

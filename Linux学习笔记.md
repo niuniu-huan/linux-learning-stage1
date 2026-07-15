@@ -300,6 +300,8 @@ ssh-add ~/.ssh/id_ed25519
 
 已确认：将本笔记公开发布到 `niuniu-huan/linux-learning-stage1`。下一步从 `/mnt/c/Users/moqi_/Desktop/learning/linux_learning/` 复制到 WSL 仓库，再以 Git 提交。
 
+已完成首次笔记发布，提交为 `f1c83d0 Add Linux learning notes`。Git 在终端中显示中文文件名时可能使用 `\345...` 形式转义，这不影响真实文件名。Markdown 文件应为普通文本权限 `644`，不应带可执行权限；同步时使用 `chmod 644 Linux学习笔记.md` 修正。
+
 ## 11. tmux（进行中）
 
 已确认安装：`tmux 3.4`。

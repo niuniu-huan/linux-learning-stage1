@@ -461,3 +461,48 @@ tmux attach -t linux-study    # 重新进入会话
 ---
 
 本笔记会在每完成一个新主题后持续补充。
+
+## 第二阶段：C/C++ 基础
+
+### 1. C 程序、结构体与 GCC 编译
+
+已创建第二阶段本地仓库：`~/linux_learning/stage2-c`，默认分支为 `main`。
+
+已编写并验证 `main.c`。程序使用 `MotorState` 结构体保存一台电机的状态：
+
+- `id`：电机编号
+- `position_rad`：位置，单位为弧度
+- `velocity_rad_s`：速度，单位为弧度每秒
+- `temperature_c`：温度，单位为摄氏度
+- `enabled`：是否使能
+
+编译与运行命令：
+
+```bash
+gcc -std=c11 -Wall -Wextra -Wpedantic -g main.c -o motor_state
+./motor_state
+```
+参数说明：`-std=c11` 指定 C11 标准；`-Wall -Wextra -Wpedantic` 开启更严格的编译警告；`-g` 生成后续 GDB 调试需要的调试信息；`-o motor_state` 指定生成的可执行文件名。
+
+验证结果：程序成功输出电机编号、位置、速度、温度和使能状态。结构体可将同一台电机相关的数据组织在一起，之后读取编码器、CAN 电机反馈和控制器状态时会反复使用这种方式。
+
+### 2. 基本类型、常量与电机速度单位换算
+
+已编写并验证 `motor_units.c`，将电机转速从 rpm（每分钟转数）换算为 rad/s（弧度每秒）。
+
+- `int` 用于电机编号等整数数据。
+- `double` 用于速度、位置等带小数的物理量。
+- `const double pi` 表示运行期间不应被修改的换算常量。
+
+换算公式为 `rad/s = rpm × 2 × π / 60`。验证中 `60.00 rpm` 的结果为 `6.283 rad/s`。
+
+编译、运行与提交：
+
+```bash
+gcc -std=c11 -Wall -Wextra -Wpedantic -g motor_units.c -o motor_units
+./motor_units
+git add motor_units.c .gitignore
+git commit -m "Add motor unit conversion example"
+```
+
+已在 `stage2-c` 创建提交 `1e50609 Add motor unit conversion example`。编译产生的 `motor_state` 与 `motor_units` 已加入 `.gitignore`，不会误提交到 Git。

@@ -1,0 +1,2 @@
+Vim is useful for remote Linux development.
+I am learning Linux for robotics.

@@ -348,6 +348,47 @@ code --install-extension ms-vscode-remote.remote-wsl
 
 已成功切换到 Remote - WSL：VS Code 左下角显示 `WSL: Ubuntu-24.04`，内置终端显示 `moqi_@moqihuan:~/linux_learning/stage1$`。这两个标志确认命令会在 Ubuntu 中执行。
 
+## 13. 命令退出状态与 PATH（进行中）
+
+Linux 命令完成后会返回退出状态：`0` 通常表示成功，非 `0` 表示失败。使用 `$?` 查看上一条命令的退出状态，必须紧跟在目标命令后执行。
+
+```bash
+command -v gcc     # 查找命令所在路径
+echo $?            # 读取上一条命令的退出状态
+```
+
+`PATH` 是 shell 寻找命令的目录列表。以后安装 ROS 2 后，如果 `ros2` 显示 `command not found`，首先检查是否已执行 ROS 环境初始化脚本，以及 `PATH` 是否包含对应目录。
+
+验证结果：`command -v gcc` 返回 `/usr/bin/gcc`，退出状态为 `0`；`command -v ros2` 无输出且退出状态为 `1`，因为当前尚未安装 ROS 2。`PATH` 开头的 `.vscode-server/.../remote-cli` 来自 VS Code Remote - WSL，属于正常环境配置。
+
+### 环境变量
+
+环境变量会影响当前 shell 启动的程序。使用 `export` 创建并导出变量：
+
+```bash
+export ROBOT_NAME="demo_bot"
+echo "$ROBOT_NAME"
+```
+
+ROS 2 的 `setup.bash` 本质上也是一组环境变量初始化；进入 ROS 2 阶段后会用 `source /opt/ros/.../setup.bash` 配置命令、库和包搜索路径。
+
+已验证：导出 `ROBOT_NAME=demo_bot` 后，子 Bash 进程可以读取它；执行 `unset ROBOT_NAME` 后变量不再存在。
+
+## 14. 后台任务与 PID（进行中）
+
+命令末尾的 `&` 会让程序在后台运行。`$!` 代表最近启动的后台任务 PID；`jobs -l` 查看当前 shell 启动的后台任务；`kill PID` 向指定进程发送终止信号。只应终止自己确认无误的进程。
+
+```bash
+sleep 300 &
+JOB_PID=$!
+jobs -l
+kill "$JOB_PID"
+```
+
+未来调试机器人节点时，可以用这些命令确认测试程序是否仍在运行；长期任务更推荐使用 `tmux` 或 `systemd` 管理。
+
+已完成练习：后台 `sleep` 进程可通过 PID 查看，使用 `kill` 终止后 `jobs -l` 不再显示该任务。`wait` 返回 `143`，表示进程收到 `SIGTERM`（信号编号 15；shell 常以 `128 + 信号编号` 报告被信号终止的状态）。`kill -9` 是强制终止手段，只有常规 `kill` 无效时才考虑使用。
+
 ## 11. tmux（进行中）
 
 已确认安装：`tmux 3.4`。

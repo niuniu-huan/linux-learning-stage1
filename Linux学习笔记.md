@@ -389,6 +389,19 @@ kill "$JOB_PID"
 
 已完成练习：后台 `sleep` 进程可通过 PID 查看，使用 `kill` 终止后 `jobs -l` 不再显示该任务。`wait` 返回 `143`，表示进程收到 `SIGTERM`（信号编号 15；shell 常以 `128 + 信号编号` 报告被信号终止的状态）。`kill -9` 是强制终止手段，只有常规 `kill` 无效时才考虑使用。
 
+## 15. 设备文件与串口（进行中）
+
+Linux 将很多硬件和内核接口表示为 `/dev` 下的文件。设备列表的权限字段第一个字符为 `c` 时表示字符设备；串口常见名称包括：
+
+- `/dev/ttyUSB0`：常见 USB 转串口设备。
+- `/dev/ttyACM0`：常见 USB CDC 设备，例如部分 STM32、Arduino。
+
+以后真实设备接入后，常见权限形态为 `crw-rw---- root dialout ...`；此时用户需要属于 `dialout` 组才可直接访问。WSL 默认不会直接显示 Windows USB 设备，必须通过 `usbipd` 转发后才可能出现这些节点。
+
+验证结果：`/dev/null`、`/dev/zero`、`/dev/random` 和 `/dev/tty` 均以 `c` 开头，确认它们是字符设备；中间的 `1, 3` 等数字为主设备号和次设备号。`/dev/null` 丢弃写入内容，`/dev/zero` 提供连续的零字节，`/dev/random` 提供随机数据，`/dev/tty` 指向当前控制终端。
+
+`dialout:x:20:` 说明 `dialout` 组存在，但当前用户尚未加入；`/dev/ttyUSB0` 和 `/dev/ttyACM0` 不存在，说明 WSL 中尚无透传的串口设备。这些结果正常，暂不执行用户组修改。
+
 ## 11. tmux（进行中）
 
 已确认安装：`tmux 3.4`。

@@ -582,3 +582,42 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -g cpp_motor_status.cpp -o cpp_motor_sta
 ```
 
 验证结果：输出电机的位置、速度、温度及 `enabled=true`。C++ 类适合组织驱动层对象、通信接口和控制器状态；后续仍需注意不在实时控制路径中滥用动态内存或异常机制。
+
+### 7. C++ 多文件工程与 CMake
+
+已创建独立项目 `~/linux_learning/stage2-c/cpp_motor_monitor`：
+
+```text
+cpp_motor_monitor/
+├── include/motor.hpp
+├── src/main.cpp
+├── src/motor.cpp
+└── CMakeLists.txt
+```
+
+- `motor.hpp` 只声明 `Motor` 类的构造函数、接口和私有成员。
+- `motor.cpp` 包含头文件并以 `Motor::函数名` 实现成员函数。
+- `main.cpp` 只依赖公开接口，创建电机对象、更新反馈、使能、打印状态并禁用。
+- `CMakeLists.txt` 使用 `project(... LANGUAGES CXX)` 和 `CMAKE_CXX_STANDARD 17` 配置 C++17 构建。
+
+构建命令：
+
+```bash
+cmake -S . -B build
+cmake --build build
+./build/cpp_motor_monitor
+```
+
+验证结果：CMake 分别编译 `src/main.cpp` 和 `src/motor.cpp`，生成并运行 `cpp_motor_monitor`。输出正确显示电机从 `enabled=true` 切换到 `enabled=false`。`build/` 是自动生成目录，应忽略而不提交。
+
+### 8. C++ `enum class` 与电机故障状态
+
+已将 C++ 电机类的布尔使能状态改为有限状态 `MotorMode`：`Disabled`、`Enabled`、`Fault`。
+
+- `enum class` 是强类型枚举，使用时必须写明 `MotorMode::Fault` 等完整名称，避免把任意整数或无关枚举混入状态值。
+- `update_feedback` 检测到温度超过上限时将状态置为 `Fault`。
+- `enable()` 在故障或超温时返回 `false`，并保持/进入 `Fault`；只有安全状态才可进入 `Enabled`。
+- `disable()` 不会清除故障，避免软件在未排查问题时误将故障电机重新视为正常。
+- `motor_mode_to_string` 使用 `switch` 将枚举映射为日志友好的文字。
+
+验证结果：40°C 时电机状态为 `enabled`；温度更新为 85°C（高于 80°C 上限）后状态为 `fault`，再次请求使能输出“拒绝在故障状态使能”。这类有限状态机是电机驱动、CAN 通信和安全互锁的基础。

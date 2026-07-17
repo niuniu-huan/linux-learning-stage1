@@ -548,3 +548,37 @@ quit
 修复方式：在 `main` 中创建有效的 `MotorState motor` 对象，并以 `&motor` 将其地址传给函数。重新编译和运行后输出 `Motor 3: 42.5 C`。
 
 嵌入式/机器人程序中，设备未初始化、通信未成功或内存生命周期错误都可能形成空指针；出现崩溃时，优先用 GDB 的断点、`print` 和 `bt` 确认传入数据与调用链。
+
+### 5. CMake：独立构建目录
+
+已为 `motor_monitor` 创建 `CMakeLists.txt`，配置内容包括：C11 标准、`src/main.c` 和 `src/motor.c` 组成的可执行目标、`include/` 头文件搜索路径，以及 `-Wall -Wextra -Wpedantic` 编译警告选项。
+
+构建流程：
+
+```bash
+cmake -S . -B build
+cmake --build build
+./build/motor_monitor
+```
+
+`-S .` 指定源码目录，`-B build` 指定独立的构建输出目录。CMake 首先生成适合当前环境的构建文件，随后由 `cmake --build` 驱动底层构建工具编译、链接。
+
+验证结果：构建过程分别编译 `src/main.c` 与 `src/motor.c`，生成 `build/motor_monitor`；运行结果正确显示电机由 `enabled` 切换为 `disabled`。构建目录属于自动生成内容，后续应加入 `.gitignore`，不提交到 Git。
+
+### 6. C++ 基础：用类封装电机状态
+
+已创建 `cpp_motor_status.cpp`，使用 C++ 类 `Motor` 管理一台电机的编号、温度上限、位置、速度、温度和使能状态。
+
+- 构造函数 `Motor(int id, double max_temperature_c)` 初始化必需配置；成员初始化列表以 `:` 开始。
+- `private` 成员不能被类外代码直接修改，状态通过 `update_feedback` 等公开函数更新。
+- `enable()` 在温度超过上限时返回 `false`，否则才把电机标记为已使能。
+- `print_status() const` 表示该函数只读取对象状态；在硬件软件中，这有助于区分“查询”和“改变状态”的接口。
+
+编译与运行：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g cpp_motor_status.cpp -o cpp_motor_status
+./cpp_motor_status
+```
+
+验证结果：输出电机的位置、速度、温度及 `enabled=true`。C++ 类适合组织驱动层对象、通信接口和控制器状态；后续仍需注意不在实时控制路径中滥用动态内存或异常机制。

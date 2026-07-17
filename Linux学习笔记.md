@@ -506,3 +506,45 @@ git commit -m "Add motor unit conversion example"
 ```
 
 已在 `stage2-c` 创建提交 `1e50609 Add motor unit conversion example`。编译产生的 `motor_state` 与 `motor_units` 已加入 `.gitignore`，不会误提交到 Git。
+
+### 3. 多文件 C 工程、头文件与 Makefile
+
+已在 `~/linux_learning/stage2-c/motor_monitor` 创建多文件电机状态示例：
+
+```text
+motor_monitor/
+├── include/motor.h
+├── src/main.c
+├── src/motor.c
+└── Makefile
+```
+
+- `motor.h` 声明 `MotorState` 和可供其他源文件调用的函数接口。
+- `motor.c` 实现 `motor_print_status` 与 `motor_set_enabled`。
+- `main.c` 创建状态数据并调用接口；传入 `&motor`，函数中以 `motor->字段` 访问结构体指针指向的数据。
+- `Makefile` 用 `make` 自动编译各个 `.c` 文件为 `.o` 目标文件，再链接为 `motor_monitor` 可执行程序；配方命令行必须以 Tab 开头。
+
+验证结果：`make` 成功编译 `src/main.c` 和 `src/motor.c`，随后链接生成程序。运行后先显示电机为 `enabled`，调用 `motor_set_enabled` 后显示为 `disabled`。
+
+排错记录：`make: No rule to make target 'src/main.o'` 表示 Makefile 中写明的源文件路径不存在。检查发现 `motor.c` 和该项目的 `main.c` 被误放入 `include/`；将它们移动到 `src/` 后构建成功。`include/` 应存放头文件，`src/` 应存放源文件。
+
+### 4. GDB 调试：空指针与调用栈
+
+已安装 `gdb 15.1`。调试示例 `debug_null_motor.c` 模拟了电机状态数据尚未获得时误使用空指针的情况。
+
+首次程序将 `MotorState *motor` 设为 `NULL`，随后传给 `motor_print_status`。使用以下流程定位问题：
+
+```gdb
+break motor_print_status
+run
+print motor
+next
+bt
+quit
+```
+
+结果：断点处 `motor=0x0`，`print motor` 显示 `(const MotorState *) 0x0`。继续执行访问 `motor->id` 后收到 `SIGSEGV`；`bt` 显示调用链为 `main` 调用 `motor_print_status`，崩溃发生在后者访问结构体字段的位置。
+
+修复方式：在 `main` 中创建有效的 `MotorState motor` 对象，并以 `&motor` 将其地址传给函数。重新编译和运行后输出 `Motor 3: 42.5 C`。
+
+嵌入式/机器人程序中，设备未初始化、通信未成功或内存生命周期错误都可能形成空指针；出现崩溃时，优先用 GDB 的断点、`print` 和 `bt` 确认传入数据与调用链。

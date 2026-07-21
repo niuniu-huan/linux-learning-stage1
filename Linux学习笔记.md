@@ -621,3 +621,47 @@ cmake --build build
 - `motor_mode_to_string` 使用 `switch` 将枚举映射为日志友好的文字。
 
 验证结果：40°C 时电机状态为 `enabled`；温度更新为 85°C（高于 80°C 上限）后状态为 `fault`，再次请求使能输出“拒绝在故障状态使能”。这类有限状态机是电机驱动、CAN 通信和安全互锁的基础。
+
+### 9. CTest：电机状态机自动化测试
+
+已将 `cpp_motor_monitor` 的构建配置调整为可复用的静态库与两个可执行文件：
+
+- `motor_driver`：静态库，包含 `src/motor.cpp`。
+- `cpp_motor_monitor`：演示程序，链接 `motor_driver`。
+- `motor_test`：测试程序，链接同一份 `motor_driver`。
+
+通过 `enable_testing()`、`add_test(NAME motor_test COMMAND motor_test)` 将测试注册给 CTest。测试覆盖三条规则：
+
+1. 40°C 的安全电机可使能。
+2. 85°C 的超温电机不可使能。
+3. 已进入故障的电机即使温度恢复为 40°C，仍不可直接重新使能（故障锁存）。
+
+构建和执行测试：
+
+```bash
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+验证结果：`motor_test` 通过，CTest 报告 `100% tests passed`。在实际机器人软件中，测试可在不连接真实电机的情况下持续验证安全逻辑，减少修改后引入回归错误的风险。
+
+### 10. AddressSanitizer 与 UndefinedBehaviorSanitizer
+
+Sanitizer 是编译时加入的运行时安全检查，通常在 WSL/PC 主机的调试和测试版本中使用：
+
+- AddressSanitizer（ASan）可检测堆/栈数组越界、释放后访问等内存错误。
+- UndefinedBehaviorSanitizer（UBSan）可检测多类未定义行为。
+- `-fno-omit-frame-pointer` 让错误报告中的调用栈更易读。
+
+练习 `sanitizer_demo.cpp` 创建了 3 个 `int` 的编码器数组，却故意读取 `encoder_counts[3]`。带 Sanitizer 的编译命令：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
+  -fsanitize=address,undefined -fno-omit-frame-pointer \
+  sanitizer_demo.cpp -o sanitizer_demo
+```
+
+运行报告 `heap-buffer-overflow`，定位到 `sanitizer_demo.cpp:7`。报告说明数组分配区域为 12 字节（3 个 4 字节 `int`），访问位置刚好在该区域之后。将索引改为合法的 `encoder_counts[2]` 后，程序正常输出 `Latest encoder count: 110`，不再报告错误。
+
+Sanitizer 会带来额外内存和运行开销，通常不直接部署到资源受限的单片机固件；但在主机端先运行它，可提前发现未来在设备端难以复现的内存问题。

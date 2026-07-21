@@ -697,3 +697,57 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
 ```
 
 验证结果：成功配置伪串口 `/dev/pts/14`（编号会变化）并输出 `Configured pseudo serial port ... at 115200 8N1.`。未来真实设备透传到 WSL 后，设备路径将通常是 `/dev/ttyUSB0` 或 `/dev/ttyACM0`；打开设备、调用 `tcgetattr`、修改配置、调用 `tcsetattr` 的流程相同。
+
+### 13. 电机文本协议帧解析与 `std::optional`
+
+已编写 `motor_protocol.cpp`，将模拟电机控制器反馈帧：
+
+```text
+MOTOR,1,1.25,6.28,36.8
+```
+
+解析为 `MotorFeedback` 结构体中的电机编号、位置、速度和温度。
+
+- `std::istringstream` 与 `std::getline(..., ',')` 按逗号分割文本帧。
+- 帧字段数不足或首字段不为 `MOTOR` 时返回 `std::nullopt`。
+- `std::stoi` / `std::stod` 的转换异常被捕获后也返回 `std::nullopt`。
+- `std::optional<MotorFeedback>` 明确表达“可能解析成功，也可能没有有效数据”，避免用魔法数或未初始化数据代替错误状态。
+
+使用 C++17 编译时，最初的 `.id = ...` 指定初始化器触发了 C++20 扩展警告。该项目使用 C++17，因此改为按结构体字段顺序的聚合初始化：
+
+```cpp
+return MotorFeedback{
+    std::stoi(id_text),
+    std::stod(position_text),
+    std::stod(velocity_text),
+    std::stod(temperature_text)
+};
+```
+
+修复后使用 `-std=c++17 -Wall -Wextra -Wpedantic` 编译无警告，程序正确输出 `Motor 1 | pos=1.25 rad | vel=6.28 rad/s | temp=36.80 C`。后续将把真实串口读取到的一行数据交给同一解析函数。
+
+### 14. 伪串口回环：读取并解析电机反馈
+
+已将协议解析器拆分为接口与实现：
+
+- `motor_protocol.hpp`：声明 `MotorFeedback` 和 `parse_motor_feedback`。
+- `motor_protocol.cpp`：实现解析逻辑，不再包含 `main`。
+- `serial_loopback_demo.cpp`：创建伪终端、模拟控制器发送、模拟主机读取，并调用解析器。
+
+伪串口回环流程：
+
+1. `openpty` 创建 controller（master）和 host（slave）两端。
+2. host 端用 `cfmakeraw`、`B115200`、`CLOCAL | CREAD` 配置为原始串口模式。
+3. controller 端写入 `MOTOR,1,1.25,6.28,36.8\n`。
+4. host 端以 `read` 读取字节，移除结尾 `\n` / `\r`。
+5. 将完整文本帧交给 `parse_motor_feedback`，得到类型安全的 `MotorFeedback` 数据。
+
+编译时将主程序与解析器一同编译，且 `openpty` 需要 `-lutil`：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
+  serial_loopback_demo.cpp motor_protocol.cpp \
+  -o serial_loopback_demo -lutil
+```
+
+验证结果：程序从伪串口 `/dev/pts/14`（编号会变化）读取并输出 `motor=1`、位置 `1.25 rad`、速度 `6.28 rad/s`、温度 `36.80 C`。真实串口接入后，通常只需将伪终端替换为 `/dev/ttyUSB0` 或 `/dev/ttyACM0`，而读取、协议解析和上层状态处理可复用。

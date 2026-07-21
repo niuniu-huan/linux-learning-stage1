@@ -665,3 +665,35 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
 运行报告 `heap-buffer-overflow`，定位到 `sanitizer_demo.cpp:7`。报告说明数组分配区域为 12 字节（3 个 4 字节 `int`），访问位置刚好在该区域之后。将索引改为合法的 `encoder_counts[2]` 后，程序正常输出 `Latest encoder count: 110`，不再报告错误。
 
 Sanitizer 会带来额外内存和运行开销，通常不直接部署到资源受限的单片机固件；但在主机端先运行它，可提前发现未来在设备端难以复现的内存问题。
+
+### 11. C++ RAII：管理 Linux 设备文件描述符
+
+已编写 `file_descriptor_demo.cpp`，使用 C++ 类 `FileDescriptor` 管理 Linux 文件描述符。示例安全地以只读方式打开 `/dev/null`，为后续打开串口设备（如 `/dev/ttyUSB0`）或其他设备接口建立资源管理模式。
+
+- 构造函数调用 POSIX `open`；若失败，抛出包含 `strerror(errno)` 系统错误信息的异常。
+- 析构函数调用 `close`。对象离开作用域时，C++ 自动执行析构函数，因此即使中间函数提前返回或发生异常，也不会遗漏关闭资源。
+- 拷贝构造和拷贝赋值被 `= delete` 禁用，避免两个对象持有同一个文件描述符并重复 `close`。
+- `get() const noexcept` 只读返回底层文件描述符；`const` 表示不改变对象，`noexcept` 表示该函数不会抛出异常。
+
+验证结果：程序输出 `Opened /dev/null, fd=3`。文件描述符 0、1、2 通常分别是标准输入、标准输出和标准错误，因此新打开的第一个文件经常是 3。之后将把相同结构用于串口和 CAN 接口。
+
+### 12. Linux 串口基础：`termios` 与伪终端
+
+已编写 `serial_termios_demo.cpp`。程序通过 `openpty` 创建一对伪终端（master/slave），将 slave 端当作串口设备，并以 `termios` 将其配置为 115200、8N1、无软件流控、非规范（原始）模式。伪终端使得没有真实硬件时也可验证串口配置代码。
+
+关键配置：
+
+- `cfsetispeed` / `cfsetospeed`：设置输入和输出波特率为 `B115200`。
+- `~PARENB`：关闭校验位；`~CSTOPB`：使用 1 个停止位；`CS8`：使用 8 个数据位，即 8N1。
+- `CREAD`：启用接收；`CLOCAL`：忽略调制解调器控制线，常用于 USB 转串口设备。
+- 关闭 `ICANON`、回显和软件流控，避免终端按行缓冲或解释控制字符。
+- `VMIN=0`、`VTIME=10`：读取可立即返回；如无数据，最多等待约 1 秒。
+
+编译时 `openpty` 需要链接 `libutil`：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
+  serial_termios_demo.cpp -o serial_termios_demo -lutil
+```
+
+验证结果：成功配置伪串口 `/dev/pts/14`（编号会变化）并输出 `Configured pseudo serial port ... at 115200 8N1.`。未来真实设备透传到 WSL 后，设备路径将通常是 `/dev/ttyUSB0` 或 `/dev/ttyACM0`；打开设备、调用 `tcgetattr`、修改配置、调用 `tcsetattr` 的流程相同。

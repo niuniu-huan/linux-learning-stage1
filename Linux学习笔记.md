@@ -751,3 +751,44 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
 ```
 
 验证结果：程序从伪串口 `/dev/pts/14`（编号会变化）读取并输出 `motor=1`、位置 `1.25 rad`、速度 `6.28 rad/s`、温度 `36.80 C`。真实串口接入后，通常只需将伪终端替换为 `/dev/ttyUSB0` 或 `/dev/ttyACM0`，而读取、协议解析和上层状态处理可复用。
+
+### 15. 串口帧读取：`poll`、超时与分段数据
+
+真实串口的单次 `read()` 不保证刚好得到完整一帧；数据可能被拆分、合并或延迟到达。已编写 `serial_frame_reader_demo.cpp`，使用 `poll()` 和逐字节缓冲解决该问题。
+
+- 控制器端故意分两次发送：`MOTOR,1,1.25,` 与 `6.28,36.8\n`。
+- `read_line(fd, 1000)` 使用 `poll` 等待输入事件；若连续 1 秒没有下一个字节，则报超时并返回空值。
+- 每次只读取一个字节；遇到 `\n` 才返回完整帧，忽略 `\r`，并限制最大帧长为 256 字节。
+- 返回 `std::optional<std::string>`，明确区分完整帧、超时/读取错误和超长帧。
+
+构建命令：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
+  serial_frame_reader_demo.cpp motor_protocol.cpp \
+  -o serial_frame_reader_demo -lutil
+```
+
+验证结果：尽管帧被拆分发送，程序仍输出 `Received complete frame ... motor=1 ...`。真实电机控制器通信中应始终采用类似的缓冲与帧边界策略，不能假设一次 `read` 对应一条消息。
+
+### 16. SocketCAN 帧格式：CAN ID、DLC 与字节序
+
+已编写 `can_frame_demo.cpp`，直接使用 Linux `<linux/can.h>` 中的 `struct can_frame` 在内存中构造和解析 CAN 帧；本节不向任何真实总线发送数据。
+
+示例定义：
+
+- 标准 CAN ID：`0x201`。
+- 数据长度 `len`（DLC）：8 字节。
+- 示例协议将目标电流 `1500 mA` 存在前两个数据字节，采用大端序，因此编码为 `0x05 0xdc`。
+
+编码时先将有符号 `int16_t` 转为无符号 `uint16_t` 保留其二进制位，再取高字节、低字节；解码时把两个字节合成为 `uint16_t`，最后转回 `int16_t`。
+
+构建与验证：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
+  can_frame_demo.cpp -o can_frame_demo
+./can_frame_demo
+```
+
+程序输出 CAN ID `0x201`、8 字节数据 `0x05 0xdc 0x00 ...`，并正确还原 `Decoded current: 1500 mA`。真实电机协议的 CAN ID、字节序、缩放比例、符号位和校验方式必须以厂商协议文档为准；未确认协议时绝不能向真实电机发送命令。

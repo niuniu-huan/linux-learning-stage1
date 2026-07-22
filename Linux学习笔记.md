@@ -856,3 +856,19 @@ Data: 0x05 0xdc
 这说明过滤器生效。真实机器人系统中，同一条 CAN 总线上可能同时存在多个电机、IMU、IO 模块或电源模块。使用 SocketCAN 过滤器可以让内核先丢弃无关报文，减少用户态程序需要处理的数据量。
 
 注意：`CAN_SFF_MASK` 适用于标准帧 ID；如果后续使用扩展帧，需要结合扩展帧标志和对应掩码重新设置过滤规则。
+
+## 阶段二：电机反馈 CAN 帧解码（SocketCAN）
+
+完成时间：2026-07-22
+
+- 定义 `MotorFeedback`，将 CAN 反馈转换为编码器位置、转速、电流、温度和状态位。
+- 练习自定义 0x201 电机反馈帧格式（大端）：
+  - Byte 0-1：编码器位置，`uint16_t`
+  - Byte 2-3：转速，`int16_t`，单位 rpm
+  - Byte 4-5：电流，`int16_t`，单位 mA
+  - Byte 6：温度，`uint8_t`，单位 °C
+  - Byte 7：状态位，bit0 为 enabled，bit1 为 fault
+- 将解析逻辑拆分为 `motor_feedback.hpp` 和 `motor_feedback.cpp`，使其可被测试程序和 SocketCAN 程序复用。
+- `socketcan_feedback_demo.cpp` 在 `vcan0` 上发送、过滤、接收 ID 为 0x201 的 CAN 帧，并解码为结构化反馈。
+- 单个 SocketCAN 程序自发自收时，需要设置 `CAN_RAW_RECV_OWN_MSGS = 1`；真实硬件场景通常由电机控制器发送反馈。
+- 实际电机的 CAN 帧定义必须以厂商协议手册为准，不能直接假设本练习中的字节含义。

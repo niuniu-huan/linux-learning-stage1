@@ -792,3 +792,67 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
 ```
 
 程序输出 CAN ID `0x201`、8 字节数据 `0x05 0xdc 0x00 ...`，并正确还原 `Decoded current: 1500 mA`。真实电机协议的 CAN ID、字节序、缩放比例、符号位和校验方式必须以厂商协议文档为准；未确认协议时绝不能向真实电机发送命令。
+
+### 17. SocketCAN 虚拟总线与原始套接字收发
+
+WSL 内核 `6.18.33.2-microsoft-standard-WSL2` 提供了 `vcan` 和 `can_raw` 模块。已安全创建仅在内核中回环的虚拟 CAN 接口：
+
+```bash
+sudo modprobe vcan
+sudo ip link add dev vcan0 type vcan
+sudo ip link set dev vcan0 up
+ip -details link show vcan0
+```
+
+`vcan0` 显示为 `UP,LOWER_UP`；它不连接任何真实 CAN 设备。需要删除时可执行 `sudo ip link delete vcan0`。
+
+已编写 `socketcan_loopback_demo.cpp`：
+
+- 以 `socket(PF_CAN, SOCK_RAW, CAN_RAW)` 创建原始 CAN 套接字。
+- 以 `SIOCGIFINDEX` 查询 `vcan0` 的接口索引，再用 `sockaddr_can` 和 `bind` 绑定套接字。
+- 使用两个套接字分别模拟发送端和接收端；发送标准帧 ID `0x201`，数据为 `0x05 0xdc`。
+- 接收端用 `poll` 等待至多 1 秒，再用 `read` 读取 `struct can_frame`，避免无限阻塞。
+
+构建与验证：
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Wpedantic -g \
+  socketcan_loopback_demo.cpp -o socketcan_loopback_demo
+./socketcan_loopback_demo
+```
+
+程序成功输出 `Received CAN ID: 0x201` 和 `Data: 0x05 0xdc`。未来连接真实 CAN 适配器时，套接字、绑定、`poll`、`read`、`write` 的程序结构可复用；但真实接口名称、CAN 位速率和电机协议必须先由硬件和厂商文档确认。
+
+### 18. SocketCAN 接收过滤：只接收指定 CAN ID
+
+已在 `socketcan_loopback_demo.cpp` 中加入 SocketCAN 接收过滤器。接收端使用：
+
+```cpp
+can_filter filter{};
+filter.can_id = 0x201;
+filter.can_mask = CAN_SFF_MASK;
+
+setsockopt(fd, SOL_CAN_RAW, CAN_RAW_FILTER, &filter, sizeof(filter));
+```
+
+含义：
+
+- `filter.can_id = 0x201`：希望接收的目标 CAN ID。
+- `filter.can_mask = CAN_SFF_MASK`：按标准 11 位 CAN ID 进行精确匹配。
+- `setsockopt(..., CAN_RAW_FILTER, ...)`：把过滤规则交给 Linux 内核中的 SocketCAN 层。
+
+验证程序中发送了两帧：
+
+- `0x123`：无关帧，应被过滤掉。
+- `0x201`：电机相关帧，应被接收。
+
+运行结果只输出：
+
+```text
+Received CAN ID: 0x201
+Data: 0x05 0xdc
+```
+
+这说明过滤器生效。真实机器人系统中，同一条 CAN 总线上可能同时存在多个电机、IMU、IO 模块或电源模块。使用 SocketCAN 过滤器可以让内核先丢弃无关报文，减少用户态程序需要处理的数据量。
+
+注意：`CAN_SFF_MASK` 适用于标准帧 ID；如果后续使用扩展帧，需要结合扩展帧标志和对应掩码重新设置过滤规则。

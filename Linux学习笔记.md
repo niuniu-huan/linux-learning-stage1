@@ -941,3 +941,23 @@ Data: 0x05 0xdc
 - 未超时的命令仍会经过 `make_safe_command()`，因此通信超时保护、故障清零和限幅共同构成发送前安全链路。
 - 将当前时间作为函数参数传入，能够确定性地测试 49 ms 与 50 ms 的边界，无需依赖真实等待时间。
 - 真实项目应根据控制周期、通信链路、驱动器行为和风险评估确定 watchdog 超时阈值。
+
+## 阶段二：周期 CAN 发送与 Watchdog 联动
+
+完成时间：2026-07-23
+
+- `socketcan_watchdog_command_demo.cpp` 将 10 ms 周期发送与 50 ms 命令 watchdog 联动。
+- 发送线程每个周期获取 watchdog 当前允许发送的安全命令，再编码为 ID `0x200` 的 CAN 帧。
+- 示例只在开始时更新一次命令，用于模拟上层控制程序失联。
+- 0～40 ms 仍发送最近命令 `{1000, -1000, 500, 0}`；达到 50 ms 后持续发送 `{0, 0, 0, 0}`。
+- 周期发送线程不能自行刷新 watchdog；只有真正产生新控制命令的上层逻辑才能刷新它，否则会掩盖通信超时。
+
+## 阶段二：SocketCAN 安全退出与信号处理
+
+完成时间：2026-07-23
+
+- `socketcan_safe_shutdown_demo.cpp` 使用 `sigaction()` 捕获 `SIGINT`（Ctrl+C）和 `SIGTERM`。
+- 信号处理函数只设置 `sig_atomic_t` 停止标志，不在其中执行 `write`、`cout` 或 `close` 等不适合信号处理上下文的操作。
+- 主循环检测到停止标志后，发送一次全零电机命令，再关闭 CAN socket。
+- 已在 `vcan0` 上验证：周期命令发送期间按 Ctrl+C 后，程序输出 `Stop requested: zero command sent, CAN socket closed.`。
+- 软件安全退出不能替代硬件急停、驱动器硬件保护和机械限位；真实机器人应多层防护。

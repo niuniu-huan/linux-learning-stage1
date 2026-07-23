@@ -920,3 +920,24 @@ Data: 0x05 0xdc
 - 编写自动化测试 `motor_command_test.cpp`，测试命令限幅、限幅后的 CAN 编码，以及未使能和故障状态的零输出。
 - 使用根目录 `CMakeLists.txt` 构建 `motor_command` 静态库和测试程序。
 - 使用 `ctest --output-on-failure` 运行测试；构建目录使用 `/tmp`，保持 Git 工作区整洁。
+
+## 阶段二：SocketCAN 固定周期控制发送
+
+完成时间：2026-07-22
+
+- `socketcan_periodic_command_demo.cpp` 以 10 ms 周期（100 Hz）向 `vcan0` 发送 ID 为 `0x200` 的电机控制帧。
+- 每轮先调用 `make_safe_command()`，再编码并发送，保证控制发送路径始终经过安全层。
+- 使用 `std::chrono::steady_clock` 测量单调时间。
+- 使用 `std::this_thread::sleep_until()` 等待下一个绝对发送时刻，避免连续 `sleep_for()` 带来的周期累计漂移。
+- 真实系统的控制周期必须结合电机驱动器协议、CAN 总线负载、控制算法和实时性要求选择。
+
+## 阶段二：电机命令通信超时保护（Watchdog）
+
+完成时间：2026-07-23
+
+- 实现 `MotorCommandWatchdog`，记录最近一次收到的控制命令和更新时间。
+- 在首次未收到命令时输出全零。
+- 当距最近一次命令达到超时时间（本练习为 50 ms）时，输出全零，避免持续发送过期控制值。
+- 未超时的命令仍会经过 `make_safe_command()`，因此通信超时保护、故障清零和限幅共同构成发送前安全链路。
+- 将当前时间作为函数参数传入，能够确定性地测试 49 ms 与 50 ms 的边界，无需依赖真实等待时间。
+- 真实项目应根据控制周期、通信链路、驱动器行为和风险评估确定 watchdog 超时阈值。
